@@ -1,0 +1,65 @@
+-path ./inflow
+
+# Grid parameters
+-Nx 397
+-Ny 397
+-Nz 713
+-Lx 2.2
+-Ly 2.2
+-Lz 7.1
+
+# Turbulence parameters
+-Gamma 16 !3.9
+-ustar 0.115
+-ustar4mean 0.0609
+-B 0.0
+-L_coef 0.1
+-D_coef 2
+-Y_loc 1
+-Karman_const 0.4
+
+# Time steps configuration
+-Nt_LES 100000
+-dt_LES 0.001
+-tiout 1000
+-save_inflow_period 1000
+-read_inflow_period 1000
+-inflow_recycle_period 1000
+
+# Inlet profile type (1=uniform, 2=log-law, 3=from-file, 4=linear-shear, 5=power-law, 6=log-law+temp, 7=from-slice)
+-InletProfile 5
+-z0 0.0000148
+-constant_shear 0.5010
+
+# Power law parameters (for InletProfile=5)
+-Ue 1
+-h_bl 1.1
+-alfa_bl 0.46
+
+# Uniform flow parameters (for InletProfile=1)
+-u_inlet 0.0
+-w_inlet 0.82
+
+# Shear parameters (for InletProfile=4)
+-U0 0.6
+-constant_shear 0.45
+
+# Temperature field parameters
+-Temperature 0
+-Temperature1 0
+-Temperature2 0
+-Temperature3 0
+-r_temperature 0.007
+-x0_temperature 0.6
+-y0_temperature 0.07
+-inlet_temperature 1.0
+
+# Enable features
+-Turb 1
+-Geninflow 1
+-PeriodicDisturb 0
+-OnlyW 0
+
+# Reference values
+-L_ref 1
+-V_ref 1
