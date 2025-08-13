@@ -97,6 +97,10 @@ PetscReal Beta;
 
 PetscReal Z_intp=0.0; // 
 
+//Z-vertical, X streamwise
+double Ux_Convective;      
+PetscReal X_intp = 0.0;
+
 double PI=3.14159265359;
 
 PetscInt Nt_LES=1200; //28800; //28800;
@@ -229,6 +233,7 @@ int main(int argc, char **argv)
 
   	PetscOptionsGetInt(PETSC_NULL, "-Ny_AvgIn", &Ny_AvgIn, &flg);
   	PetscOptionsGetInt(PETSC_NULL, "-Geninflow", &Geninflow, &flg);
+	PetscOptionsGetInt(PETSC_NULL, "-Znormal", &Znormal, &flg);
 
 
 
@@ -552,11 +557,17 @@ int main(int argc, char **argv)
 				ucat[j][i].z=w_inlet;
 			} 
 			else if (InletProfile==2) {
-				ucat[j][i].x=0.0;
-				ucat[j][i].y=0.0;
-				if (j==0) ucat[j][i].z=0.0;
-				else ucat[j][i].z=ustar4mean*log(Y_LES[j][i]/z0)/0.4;
-
+				if (Znormal) {
+					ucat[j][i].x = (j==0) ? 0.0 : ustar4mean * log(Z_LES[j][i]/z0)/0.4; // streamwise now in .x
+    				ucat[j][i].y = 0.0;
+    				ucat[j][i].z = 0.0;
+				}
+				else {
+					ucat[j][i].x=0.0;
+					ucat[j][i].y=0.0;
+					if (j==0) ucat[j][i].z=0.0;
+					else ucat[j][i].z=ustar4mean*log(Y_LES[j][i]/z0)/0.4;
+				}
 				//double Ulinear = ustar4mean * Y_LES[j][i]/z0;
 
 				//if (j!=Ny_LES-2 && ucat[j][i].z < Ulinear && ucat[j+1][i].z > Ulinear ) jfix = j;
@@ -590,9 +601,16 @@ int main(int argc, char **argv)
 			}	
 
 			else if (InletProfile==5) {
-				ucat[j][i].x=0.0;
-				ucat[j][i].y=0.0;
-				ucat[j][i].z=Ue*pow(Y_LES[j][i]/h_bl,alfa_bl);
+				if (Znormal) {
+					ucat[j][i].x=Ue*pow(Z_LES[j][i]/h_bl,alfa_bl);
+					ucat[j][i].y=0.0;
+					ucat[j][i].z=0.0;
+				}
+				else {
+					ucat[j][i].x=0.0;
+					ucat[j][i].y=0.0;
+					ucat[j][i].z=Ue*pow(Y_LES[j][i]/h_bl,alfa_bl);
+				}
 
 				//double Ulinear = ustar4mean * Y_LES[j][i]/z0;
 
@@ -669,29 +687,51 @@ int main(int argc, char **argv)
 //			Uz_Convective=w_inlet;
 
 			//if (InletProfile==2) {	
+			if (Znormal){
+				double fac_Ux = 1.0/((Nx_LES-1)*(Ny_LES-1));
+    			Ux_Convective = 0.0;
+    			for (j=0;j<Ny_LES-1;j++)
+    			for (i=0;i<Nx_LES-1;i++) {
+        			Ux_Convective += ucat[j][i].x * fac_Ux / V_ref;
+			}
+			else {
 			double fac_Uz=1.0/((Nx_LES-1)*(Ny_LES-1));
 			Uz_Convective=0.0;
 			for(j=0;j<Ny_LES-1;j++)
 			for(i=0;i<Nx_LES-1;i++) {
 				Uz_Convective+=ucat[j][i].z*fac_Uz/V_ref;
 			}
+		}
 
 			//}
 			//else if (InletProfile==1) Uz_Convective=sqrt(w_inlet*w_inlet+u_inlet*u_inlet);
 			
-
-			Z_intp+=Uz_Convective*dt_LES_scaled;
+			if (Znormal) X_intp += Ux_Convective * dt_LES_scaled;
+			else Z_intp+=Uz_Convective*dt_LES_scaled;
 			
-			double XX_intp=Z_intp;				
-			if ((Z_intp-X[Nx-1])>1.e-9) {
-				int kkk=Z_intp/X[Nx-1];
-				XX_intp=Z_intp-kkk*X[Nx-1];	
-			}	
-
-			int II_intp;
-			for(i=1;i<Nx;i++) {
-				if ((XX_intp-X[i-1])>=-1.e-20 && (XX_intp-X[i])<=1.e-20) II_intp=i;
+			if (Znormal) {
+				X_intp += Ux_Convective * dt_LES_scaled;double XX_intp = X_intp;
+				if ((X_intp - X[Nx-1]) > 1.e-9) {
+					int kkk = X_intp / X[Nx-1];
+					XX_intp = X_intp - kkk * X[Nx-1];
+				}
+				int II_intp;
+				for (i=1;i<Nx;i++) {
+					if ((XX_intp - X[i-1])>=-1.e-20 && (XX_intp - X[i])<=1.e-20) II_intp=i;
+				}
 			}
+			
+			else {double XX_intp=Z_intp;				
+				if ((Z_intp-X[Nx-1])>1.e-9) {
+					int kkk=Z_intp/X[Nx-1];
+					XX_intp=Z_intp-kkk*X[Nx-1];	
+				}	
+
+				int II_intp;
+				for(i=1;i<Nx;i++) {
+					if ((XX_intp-X[i-1])>=-1.e-20 && (XX_intp-X[i])<=1.e-20) II_intp=i;
+			}
+		}
 
 			printf("****** U_Convec=%le  \n", Uz_Convective);
 			printf("****** XX_intp=%le  \n", XX_intp);
@@ -720,6 +760,17 @@ int main(int argc, char **argv)
 			//	printf("X_syn1=%le, X_LES=%le X_syn2=%le\n", Y[ii+1], X_LES[j][i], Y[ii] );			
 			//	printf("Y_syn1=%le, Y_LES=%le Y_syn2=%le\n", Z[jj+1], Y_LES[j][i], Z[jj] );			
 
+			if (Znormal) {
+				double uu1=fac4*(fac2*U[jj][ii][II_intp-1]+fac1*U[jj][ii+1][II_intp-1]) + fac3*(fac2*U[jj+1][ii][II_intp-1]+fac1*U[jj+1][ii+1][II_intp-1]);
+				double uu2=fac4*(fac2*U[jj][ii][II_intp]  +fac1*U[jj][ii+1][II_intp])   + fac3*(fac2*U[jj+1][ii][II_intp]  +fac1*U[jj+1][ii+1][II_intp]);
+
+				double vv1=fac4*(fac2*V[jj][ii][II_intp-1]+fac1*V[jj][ii+1][II_intp-1]) + fac3*(fac2*V[jj+1][ii][II_intp-1]+fac1*V[jj+1][ii+1][II_intp-1]);
+				double vv2=fac4*(fac2*V[jj][ii][II_intp]  +fac1*V[jj][ii+1][II_intp])   + fac3*(fac2*V[jj+1][ii][II_intp]  +fac1*V[jj+1][ii+1][II_intp]);
+
+				double ww1=fac4*(fac2*W[jj][ii][II_intp-1]+fac1*W[jj][ii+1][II_intp-1]) + fac3*(fac2*W[jj+1][ii][II_intp-1]+fac1*W[jj+1][ii+1][II_intp-1]);
+				double ww2=fac4*(fac2*W[jj][ii][II_intp]  +fac1*W[jj][ii+1][II_intp])   + fac3*(fac2*W[jj+1][ii][II_intp]  +fac1*W[jj+1][ii+1][II_intp]);
+			}
+			else {
 				double uu1=fac4*(fac2*V[jj][ii][II_intp-1]+fac1*V[jj][ii+1][II_intp-1])+fac3*(fac2*V[jj+1][ii][II_intp-1]+fac1*V[jj+1][ii+1][II_intp-1]);
 				double uu2=fac4*(fac2*V[jj][ii][II_intp]+fac1*V[jj][ii+1][II_intp])+fac3*(fac2*V[jj+1][ii][II_intp]+fac1*V[jj+1][ii+1][II_intp]);
 	
@@ -727,7 +778,7 @@ int main(int argc, char **argv)
 				double vv2=fac4*(fac2*W[jj][ii][II_intp]+fac1*W[jj][ii+1][II_intp])+fac3*(fac2*W[jj+1][ii][II_intp]+fac1*W[jj+1][ii+1][II_intp]);
 	
 				double ww1=fac4*(fac2*U[jj][ii][II_intp-1]+fac1*U[jj][ii+1][II_intp-1])+fac3*(fac2*U[jj+1][ii][II_intp-1]+fac1*U[jj+1][ii+1][II_intp-1]);
-				double ww2=fac4*(fac2*U[jj][ii][II_intp]+fac1*U[jj][ii+1][II_intp])+fac3*(fac2*U[jj+1][ii][II_intp]+fac1*U[jj+1][ii+1][II_intp]);
+				double ww2=fac4*(fac2*U[jj][ii][II_intp]+fac1*U[jj][ii+1][II_intp])+fac3*(fac2*U[jj+1][ii][II_intp]+fac1*U[jj+1][ii+1][II_intp]);}
 
 			//	printf("fac_11=%le, fac_22=%le \n", fac_11, fac_22);			
 			//	printf("uu1=%le, uu2=%le \n", uu1, uu2);			
@@ -738,6 +789,11 @@ int main(int argc, char **argv)
 					ucat[j][i].x+=fac_22*uu1+fac_11*uu2;
 					ucat[j][i].y+=fac_22*vv1+fac_11*vv2;
 					ucat[j][i].z+=fac_22*ww1+fac_11*ww2;
+				}
+				else if (Znormal) {
+					ucat[j][i].x += fac_22*uu1 + fac_11*uu2;  // streamwise
+					ucat[j][i].y += fac_22*vv1 + fac_11*vv2;  // spanwise
+					ucat[j][i].z += fac_22*ww1 + fac_11*ww2;  // vertical
 				}
 			}
 
